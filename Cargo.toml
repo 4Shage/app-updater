@@ -1,0 +1,7 @@
+[workspace]
+members = ["common", "server", "updater-lib", "updater-gui"]
+resolver = "2"
+
+[profile.release]
+lto = true
+strip = true

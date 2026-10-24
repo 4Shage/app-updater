@@ -1,0 +1,15 @@
+[package]
+name = "updater-gui"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "updater"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+updater-lib = { path = "../updater-lib" }
+anyhow = "1"
+eframe = { version = "0.29", default-features = false, features = ["accesskit", "default_fonts", "glow", "x11"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "async-std"] }
