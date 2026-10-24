@@ -130,6 +130,20 @@ async fn upsert_app(
     Ok(StatusCode::OK)
 }
 
+async fn delete_app(
+    State(state): State<Shared>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> ApiResult<StatusCode> {
+    authorize(&state, &headers).await?;
+    check_safe(&id)?;
+    let mut index = state.index.lock().await;
+    index.retain(|a| a.id != id);
+    save_index(&state, &index).await?;
+    let _ = fs::remove_dir_all(state.root.join("files").join(&id)).await;
+    Ok(StatusCode::OK)
+}
+
 async fn upload_release(
     State(state): State<Shared>,
     Path(id): Path<String>,
@@ -237,7 +251,7 @@ async fn main() {
         .route("/api/apps", get(list_apps))
         .route("/api/apps/:id/:version/:platform/download", get(download))
         .route("/api/dev/check", get(dev_check))
-        .route("/api/dev/apps/:id", put(upsert_app))
+        .route("/api/dev/apps/:id", put(upsert_app).delete(delete_app))
         .route("/api/dev/apps/:id/releases", post(upload_release))
         .route("/api/dev/apps/:id/:version/:platform", delete(delete_release))
         .layer(DefaultBodyLimit::disable())

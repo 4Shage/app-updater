@@ -151,3 +151,22 @@ pub fn delete_release(shared: &Shared, ctx: &egui::Context, id: String, version:
         Ok(format!("Usunięto {id} {version}"))
     });
 }
+
+pub fn save_meta(shared: &Shared, ctx: &egui::Context, form: DevForm) {
+    run(shared, ctx, move |shared, _| {
+        let api = shared.lock().unwrap().api();
+        let name = if form.name.is_empty() { &form.id } else { &form.name };
+        api.dev_upsert_app(&form.id, name, &form.description)?;
+        fetch_remote(shared)?;
+        Ok(format!("Zapisano opis {}", form.id))
+    });
+}
+
+pub fn delete_app(shared: &Shared, ctx: &egui::Context, id: String) {
+    run(shared, ctx, move |shared, _| {
+        let api = shared.lock().unwrap().api();
+        api.dev_delete_app(&id)?;
+        fetch_remote(shared)?;
+        Ok(format!("Usunięto aplikację {id}"))
+    });
+}

@@ -25,6 +25,8 @@ pub struct UpdaterApp {
     show_password: bool,
     password_input: String,
     form: DevForm,
+    confirm_delete: bool,
+    title_clicks: u8,
 }
 
 impl UpdaterApp {
@@ -36,6 +38,8 @@ impl UpdaterApp {
             show_password: false,
             password_input: String::new(),
             form: DevForm { platform: current_platform(), ..Default::default() },
+            confirm_delete: false,
+            title_clicks: 0,
         }
     }
 
@@ -122,14 +126,34 @@ impl UpdaterApp {
 
     fn dev_tab(&mut self, ui: &mut egui::Ui, remote: &[AppEntry], busy: bool) {
         let ctx = ui.ctx().clone();
+
+        ui.horizontal(|ui| {
+            ui.label("Aplikacja:");
+            let selected = if self.form.id.is_empty() { "nowa".to_string() } else { self.form.id.clone() };
+            egui::ComboBox::from_id_salt("dev_app").selected_text(selected).show_ui(ui, |ui| {
+                if ui.selectable_label(self.form.id.is_empty(), "nowa").clicked() {
+                    self.form = DevForm { platform: self.form.platform.clone(), ..Default::default() };
+                    self.confirm_delete = false;
+                }
+                for app in remote {
+                    if ui.selectable_label(self.form.id == app.id, &app.id).clicked() {
+                        self.form.id = app.id.clone();
+                        self.form.name = app.name.clone();
+                        self.form.description = app.description.clone();
+                        self.confirm_delete = false;
+                    }
+                }
+            });
+        });
+
         egui::Grid::new("dev_form").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
             for (label, value) in [
-                ("ID aplikacji", &mut self.form.id),
+                ("ID", &mut self.form.id),
                 ("Nazwa", &mut self.form.name),
                 ("Opis", &mut self.form.description),
                 ("Wersja (semver)", &mut self.form.version),
                 ("Platforma", &mut self.form.platform),
-                ("Notatki", &mut self.form.notes),
+                ("Notatki wydania", &mut self.form.notes),
             ] {
                 ui.label(label);
                 ui.text_edit_singleline(value);
@@ -144,10 +168,24 @@ impl UpdaterApp {
             });
             ui.end_row();
         });
+
+        let has_id = !self.form.id.is_empty();
+        let can_upload = has_id && !self.form.version.is_empty() && self.form.file.is_some();
+        let exists = remote.iter().any(|a| a.id == self.form.id);
         ui.horizontal(|ui| {
-            let ready = !self.form.id.is_empty() && !self.form.version.is_empty() && self.form.file.is_some();
-            if ui.add_enabled(!busy && ready, egui::Button::new("Wyślij na serwer")).clicked() {
+            if ui.add_enabled(!busy && can_upload, egui::Button::new("Wyślij wydanie")).clicked() {
                 jobs::upload(&self.shared, &ctx, self.form.clone());
+            }
+            if ui.add_enabled(!busy && has_id, egui::Button::new("Zapisz opis")).clicked() {
+                jobs::save_meta(&self.shared, &ctx, self.form.clone());
+            }
+            let label = if self.confirm_delete { "Potwierdź usunięcie" } else { "Usuń aplikację" };
+            if ui.add_enabled(!busy && exists, egui::Button::new(label)).clicked() {
+                if self.confirm_delete {
+                    jobs::delete_app(&self.shared, &ctx, self.form.id.clone());
+                    self.form = DevForm { platform: self.form.platform.clone(), ..Default::default() };
+                }
+                self.confirm_delete = !self.confirm_delete;
             }
             if ui.button("Zablokuj tryb dev").clicked() {
                 self.shared.lock().unwrap().dev_password = None;
@@ -196,7 +234,13 @@ impl eframe::App for UpdaterApp {
 
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("App Updater");
+                if ui.heading("App Updater").interact(egui::Sense::click()).clicked() {
+                    self.title_clicks += 1;
+                    if self.title_clicks >= 5 {
+                        self.title_clicks = 0;
+                        self.show_password = true;
+                    }
+                }
                 if ui.add_enabled(!busy, egui::Button::new("Odśwież")).clicked() {
                     jobs::refresh(&self.shared, ctx);
                 }

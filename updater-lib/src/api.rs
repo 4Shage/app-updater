@@ -94,6 +94,12 @@ impl Api {
         Ok(())
     }
 
+    pub fn dev_delete_app(&self, id: &str) -> Result<()> {
+        let req = self.client.delete(self.url(&format!("/api/dev/apps/{id}")));
+        ok(self.dev(req).send()?)?;
+        Ok(())
+    }
+
     pub fn dev_delete_release(&self, id: &str, version: &str, platform: &str) -> Result<()> {
         let req = self.client.delete(self.url(&format!("/api/dev/apps/{id}/{version}/{platform}")));
         ok(self.dev(req).send()?)?;
