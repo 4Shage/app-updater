@@ -16,6 +16,8 @@ enum Tab {
 enum Action {
     Install(String),
     Launch(PathBuf),
+    AskUninstall(String),
+    Uninstall(String),
 }
 
 pub struct UpdaterApp {
@@ -26,6 +28,7 @@ pub struct UpdaterApp {
     password_input: String,
     form: DevForm,
     confirm_delete: bool,
+    confirm_uninstall: Option<String>,
     title_clicks: u8,
 }
 
@@ -39,6 +42,7 @@ impl UpdaterApp {
             password_input: String::new(),
             form: DevForm { platform: current_platform(), ..Default::default() },
             confirm_delete: false,
+            confirm_uninstall: None,
             title_clicks: 0,
         }
     }
@@ -114,6 +118,15 @@ impl UpdaterApp {
                                     if ui.button("Uruchom").clicked() {
                                         action = Some(Action::Launch(exe.clone()));
                                     }
+                                }
+                                let confirming = self.confirm_uninstall.as_deref() == Some(app.id.as_str());
+                                let label = if confirming { "Potwierdź odinstalowanie" } else { "Odinstaluj" };
+                                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                                    action = Some(if confirming {
+                                        Action::Uninstall(app.id.clone())
+                                    } else {
+                                        Action::AskUninstall(app.id.clone())
+                                    });
                                 }
                             }
                         }
@@ -282,6 +295,11 @@ impl eframe::App for UpdaterApp {
 
         match action {
             Some(Action::Install(id)) => jobs::install_one(&self.shared, ctx, id),
+            Some(Action::AskUninstall(id)) => self.confirm_uninstall = Some(id),
+            Some(Action::Uninstall(id)) => {
+                self.confirm_uninstall = None;
+                jobs::uninstall(&self.shared, ctx, id);
+            }
             Some(Action::Launch(exe)) => {
                 let _ = std::process::Command::new(exe).spawn();
             }

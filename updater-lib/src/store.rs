@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Installed {
+    #[serde(default)]
+    pub name: String,
     pub version: String,
     pub dir: PathBuf,
     pub exe: Option<PathBuf>,
@@ -55,6 +57,6 @@ impl Store {
 
     pub fn register(&mut self, id: &str, version: &str, exe: PathBuf) {
         let dir = exe.parent().map(PathBuf::from).unwrap_or_default();
-        self.apps.insert(id.into(), Installed { version: version.into(), dir, exe: Some(exe) });
+        self.apps.insert(id.into(), Installed { name: id.into(), version: version.into(), dir, exe: Some(exe) });
     }
 }

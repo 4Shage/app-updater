@@ -5,12 +5,14 @@ use anyhow::{bail, Result};
 use common::{current_platform, is_newer, Release};
 
 use crate::api::Api;
+use crate::shortcut;
 use crate::store::{Installed, Store};
 
 pub fn install_release(
     api: &Api,
     store: &Store,
     app_id: &str,
+    name: &str,
     release: &Release,
     progress: impl FnMut(u64, u64),
 ) -> Result<Installed> {
@@ -37,7 +39,30 @@ pub fn install_release(
     };
     let _ = fs::remove_file(&tmp);
 
-    Ok(Installed { version: release.version.clone(), dir, exe })
+    if existing.is_none() {
+        if let Some(exe) = &exe {
+            let _ = shortcut::create(name, exe);
+        }
+    }
+
+    Ok(Installed { name: name.into(), version: release.version.clone(), dir, exe })
+}
+
+pub fn uninstall(store: &mut Store, app_id: &str) -> Result<()> {
+    let Some(installed) = store.apps.get(app_id).cloned() else {
+        bail!("aplikacja nie jest zainstalowana");
+    };
+    if installed.dir.starts_with(store.install_root()) {
+        if installed.dir.exists() {
+            fs::remove_dir_all(&installed.dir)?;
+        }
+    } else if let Some(exe) = installed.exe.as_ref().filter(|e| e.exists()) {
+        fs::remove_file(exe)?;
+    }
+    let name = if installed.name.is_empty() { app_id } else { &installed.name };
+    shortcut::remove(name);
+    store.apps.remove(app_id);
+    store.save()
 }
 
 pub fn update_all(
@@ -55,7 +80,7 @@ pub fn update_all(
         if !is_newer(&release.version, &installed.version) {
             continue;
         }
-        let result = install_release(api, store, &app.id, release, |d, t| progress(&app.id, d, t))?;
+        let result = install_release(api, store, &app.id, &app.name, release, |d, t| progress(&app.id, d, t))?;
         store.apps.insert(app.id.clone(), result);
         store.save()?;
         updated.push(format!("{} {}", app.name, release.version));

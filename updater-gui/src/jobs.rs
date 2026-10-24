@@ -95,7 +95,7 @@ pub fn install_one(shared: &Shared, ctx: &egui::Context, id: String) {
             let release = app.latest(&current_platform()).cloned().context("brak wersji dla tej platformy")?;
             (model.api(), model.store.clone(), app, release)
         };
-        let installed = install::install_release(&api, &store, &app.id, &release, |d, t| {
+        let installed = install::install_release(&api, &store, &app.id, &app.name, &release, |d, t| {
             report_progress(shared, ctx, &app.name, d, t)
         })?;
         store.apps.insert(app.id.clone(), installed);
@@ -168,5 +168,15 @@ pub fn delete_app(shared: &Shared, ctx: &egui::Context, id: String) {
         api.dev_delete_app(&id)?;
         fetch_remote(shared)?;
         Ok(format!("Usunięto aplikację {id}"))
+    });
+}
+
+pub fn uninstall(shared: &Shared, ctx: &egui::Context, id: String) {
+    run(shared, ctx, move |shared, _| {
+        let mut store = shared.lock().unwrap().store.clone();
+        install::uninstall(&mut store, &id)
+            .context("nie udalo sie usunac (czy aplikacja jest zamknieta?)")?;
+        shared.lock().unwrap().store = store;
+        Ok(format!("Odinstalowano {id}"))
     });
 }
