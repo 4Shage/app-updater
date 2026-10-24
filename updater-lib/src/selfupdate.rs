@@ -20,7 +20,7 @@ pub fn self_update(server: &str, app_id: &str, current_version: &str) -> Result<
     let Some(release) = check(server, app_id, current_version)? else {
         return Ok(None);
     };
-    if release.filename.ends_with(".zip") {
+    if release.filename.ends_with(".zip") || release.filename.ends_with(".tar.gz") {
         bail!("self_update wymaga wydania w postaci pojedynczego pliku exe");
     }
     let tmp = std::env::temp_dir().join(format!("selfupdate-{app_id}-{}", release.filename));
