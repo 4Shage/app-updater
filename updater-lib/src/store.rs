@@ -51,8 +51,12 @@ impl Store {
         Ok(())
     }
 
+    pub fn home_dir() -> PathBuf {
+        dirs::data_local_dir().unwrap_or_default().join("AppUpdater")
+    }
+
     pub fn install_root(&self) -> PathBuf {
-        dirs::data_local_dir().unwrap_or_default().join("AppUpdater").join("apps")
+        Self::home_dir().join("apps")
     }
 
     pub fn register(&mut self, id: &str, version: &str, exe: PathBuf) {

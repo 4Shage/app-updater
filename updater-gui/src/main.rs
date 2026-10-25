@@ -3,11 +3,16 @@
 mod app;
 mod cli;
 mod jobs;
+mod selfinstall;
 
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some(code) = cli::run(&args) {
         std::process::exit(code);
+    }
+
+    if selfinstall::run() {
+        return Ok(());
     }
 
     let options = eframe::NativeOptions {
