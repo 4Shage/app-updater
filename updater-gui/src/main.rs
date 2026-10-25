@@ -15,6 +15,8 @@ fn main() -> eframe::Result {
         return Ok(());
     }
 
+    updater_lib::install::prune_all(&updater_lib::store::Store::load());
+
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default().with_inner_size([720.0, 560.0]),
         ..Default::default()

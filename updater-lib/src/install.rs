@@ -1,4 +1,5 @@
 use std::fs::{self, File};
+use std::time::SystemTime;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
@@ -7,6 +8,8 @@ use common::{current_platform, is_newer, Release};
 use crate::api::Api;
 use crate::shortcut;
 use crate::store::{Installed, Store};
+
+pub const MAX_VERSION_FILES: usize = 2;
 
 pub fn install_release(
     api: &Api,
@@ -38,6 +41,10 @@ pub fn install_release(
         Some(target)
     };
     let _ = fs::remove_file(&tmp);
+
+    if let Some(exe) = &exe {
+        prune_old(&dir, exe, MAX_VERSION_FILES);
+    }
 
     if existing.is_none() {
         if let Some(exe) = &exe {
@@ -149,4 +156,59 @@ pub fn make_executable(path: &Path) -> Result<()> {
     }
     let _ = path;
     Ok(())
+}
+
+pub fn prune_all(store: &Store) {
+    for installed in store.apps.values() {
+        if let Some(exe) = &installed.exe {
+            prune_old(&installed.dir, exe, MAX_VERSION_FILES);
+        }
+    }
+}
+
+/// Zostawia w katalogu najwyzej `keep` plikow wersji: biezacy exe i najnowsze poprzednie.
+pub fn prune_old(dir: &Path, exe: &Path, keep: usize) {
+    let (Some(stem), Some(name)) = (exe.file_stem().and_then(|s| s.to_str()), exe.file_name()) else {
+        return;
+    };
+    let ext = exe.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let Ok(entries) = fs::read_dir(dir) else { return };
+
+    let mut old: Vec<(SystemTime, PathBuf)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let file = path.file_name()?;
+            if file == name || !path.is_file() {
+                return None;
+            }
+            let rest = file.to_str()?.strip_prefix(stem)?;
+            if !rest.starts_with(|c: char| !c.is_alphanumeric()) {
+                return None;
+            }
+            let file_ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if file_ext != "old" && !(file_ext == ext && is_executable(&path)) {
+                return None;
+            }
+            Some((entry.metadata().ok()?.modified().ok()?, path))
+        })
+        .collect();
+
+    old.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, path) in old.into_iter().skip(keep.saturating_sub(1)) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        true
+    }
 }

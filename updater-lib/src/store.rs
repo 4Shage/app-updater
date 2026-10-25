@@ -51,6 +51,14 @@ impl Store {
         Ok(())
     }
 
+    pub fn delete_state() {
+        let path = Self::path();
+        let _ = fs::remove_file(&path);
+        if let Some(parent) = path.parent() {
+            let _ = fs::remove_dir(parent);
+        }
+    }
+
     pub fn home_dir() -> PathBuf {
         dirs::data_local_dir().unwrap_or_default().join("AppUpdater")
     }

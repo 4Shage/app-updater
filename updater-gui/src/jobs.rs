@@ -97,34 +97,20 @@ fn fetch_remote(shared: &Shared) -> Result<usize> {
 }
 
 pub fn refresh(shared: &Shared, ctx: &egui::Context) {
-    run(shared, ctx, |shared, _| {
-        Ok(format!(
-            "Pobrano listę: {} aplikacji",
-            fetch_remote(shared)?
-        ))
-    });
+    run(shared, ctx, |shared, _| Ok(format!("Pobrano listę: {} aplikacji", fetch_remote(shared)?)));
 }
 
 pub fn install_one(shared: &Shared, ctx: &egui::Context, id: String) {
     run(shared, ctx, move |shared, ctx| {
         let (api, mut store, app, release) = {
             let model = shared.lock().unwrap();
-            let app = model
-                .remote
-                .iter()
-                .find(|a| a.id == id)
-                .cloned()
-                .context("brak aplikacji na serwerze")?;
-            let release = app
-                .latest(&current_platform())
-                .cloned()
-                .context("brak wersji dla tej platformy")?;
+            let app = model.remote.iter().find(|a| a.id == id).cloned().context("brak aplikacji na serwerze")?;
+            let release = app.latest(&current_platform()).cloned().context("brak wersji dla tej platformy")?;
             (model.api(), model.store.clone(), app, release)
         };
-        let installed =
-            install::install_release(&api, &store, &app.id, &app.name, &release, |d, t| {
-                report_progress(shared, ctx, &app.name, d, t)
-            })?;
+        let installed = install::install_release(&api, &store, &app.id, &app.name, &release, |d, t| {
+            report_progress(shared, ctx, &app.name, d, t)
+        })?;
         store.apps.insert(app.id.clone(), installed);
         store.save()?;
         shared.lock().unwrap().store = store;
@@ -138,9 +124,7 @@ pub fn update_all(shared: &Shared, ctx: &egui::Context) {
             let model = shared.lock().unwrap();
             (model.api(), model.store.clone())
         };
-        let updated = install::update_all(&api, &mut store, |name, d, t| {
-            report_progress(shared, ctx, name, d, t)
-        })?;
+        let updated = install::update_all(&api, &mut store, |name, d, t| report_progress(shared, ctx, name, d, t))?;
         shared.lock().unwrap().store = store;
         fetch_remote(shared)?;
         Ok(if updated.is_empty() {
@@ -153,8 +137,7 @@ pub fn update_all(shared: &Shared, ctx: &egui::Context) {
 
 pub fn unlock(shared: &Shared, ctx: &egui::Context, password: String) {
     run(shared, ctx, move |shared, _| {
-        let api = Api::new(&shared.lock().unwrap().store.server_url)
-            .with_password(Some(password.clone()));
+        let api = Api::new(&shared.lock().unwrap().store.server_url).with_password(Some(password.clone()));
         api.dev_check()?;
         shared.lock().unwrap().dev_password = Some(password);
         Ok("Tryb dev odblokowany".into())
@@ -165,11 +148,7 @@ pub fn upload(shared: &Shared, ctx: &egui::Context, form: DevForm) {
     run(shared, ctx, move |shared, _| {
         let api = shared.lock().unwrap().api();
         let file = form.file.as_ref().context("nie wybrano pliku")?;
-        let name = if form.name.is_empty() {
-            &form.id
-        } else {
-            &form.name
-        };
+        let name = if form.name.is_empty() { &form.id } else { &form.name };
         api.dev_upsert_app(&form.id, name, &form.description)?;
         api.dev_upload(&form.id, &form.version, &form.platform, &form.notes, file)?;
         fetch_remote(shared)?;
@@ -177,13 +156,7 @@ pub fn upload(shared: &Shared, ctx: &egui::Context, form: DevForm) {
     });
 }
 
-pub fn delete_release(
-    shared: &Shared,
-    ctx: &egui::Context,
-    id: String,
-    version: String,
-    platform: String,
-) {
+pub fn delete_release(shared: &Shared, ctx: &egui::Context, id: String, version: String, platform: String) {
     run(shared, ctx, move |shared, _| {
         let api = shared.lock().unwrap().api();
         api.dev_delete_release(&id, &version, &platform)?;
@@ -195,11 +168,7 @@ pub fn delete_release(
 pub fn save_meta(shared: &Shared, ctx: &egui::Context, form: DevForm) {
     run(shared, ctx, move |shared, _| {
         let api = shared.lock().unwrap().api();
-        let name = if form.name.is_empty() {
-            &form.id
-        } else {
-            &form.name
-        };
+        let name = if form.name.is_empty() { &form.id } else { &form.name };
         api.dev_upsert_app(&form.id, name, &form.description)?;
         fetch_remote(shared)?;
         Ok(format!("Zapisano opis {}", form.id))
@@ -240,4 +209,12 @@ fn restart() -> ! {
         let _ = std::process::Command::new(exe).spawn();
     }
     std::process::exit(0)
+}
+
+pub fn uninstall_self(shared: &Shared, ctx: &egui::Context) {
+    run(shared, ctx, |shared, _| {
+        let mut store = shared.lock().unwrap().store.clone();
+        crate::selfinstall::uninstall(&mut store)?;
+        std::process::exit(0)
+    });
 }

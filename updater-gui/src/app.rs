@@ -29,6 +29,7 @@ pub struct UpdaterApp {
     form: DevForm,
     confirm_delete: bool,
     confirm_uninstall: Option<String>,
+    confirm_self_uninstall: bool,
     title_clicks: u8,
 }
 
@@ -40,12 +41,10 @@ impl UpdaterApp {
             first_frame: true,
             show_password: false,
             password_input: String::new(),
-            form: DevForm {
-                platform: current_platform(),
-                ..Default::default()
-            },
+            form: DevForm { platform: current_platform(), ..Default::default() },
             confirm_delete: false,
             confirm_uninstall: None,
+            confirm_self_uninstall: false,
             title_clicks: 0,
         }
     }
@@ -56,19 +55,15 @@ impl UpdaterApp {
         }
         let mut submit = false;
         let mut cancel = false;
-        egui::Window::new("Tryb dev")
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                let edit =
-                    ui.add(egui::TextEdit::singleline(&mut self.password_input).password(true));
-                edit.request_focus();
-                let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                ui.horizontal(|ui| {
-                    submit = ui.button("OK").clicked() || enter;
-                    cancel = ui.button("Anuluj").clicked();
-                });
+        egui::Window::new("Tryb dev").collapsible(false).resizable(false).show(ctx, |ui| {
+            let edit = ui.add(egui::TextEdit::singleline(&mut self.password_input).password(true));
+            edit.request_focus();
+            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            ui.horizontal(|ui| {
+                submit = ui.button("OK").clicked() || enter;
+                cancel = ui.button("Anuluj").clicked();
             });
+        });
         if submit {
             jobs::unlock(&self.shared, ctx, std::mem::take(&mut self.password_input));
         }
@@ -78,13 +73,7 @@ impl UpdaterApp {
         }
     }
 
-    fn apps_tab(
-        &self,
-        ui: &mut egui::Ui,
-        remote: &[AppEntry],
-        store: &Store,
-        busy: bool,
-    ) -> Option<Action> {
+    fn apps_tab(&self, ui: &mut egui::Ui, remote: &[AppEntry], store: &Store, busy: bool) -> Option<Action> {
         let platform = current_platform();
         let mut action = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -114,20 +103,14 @@ impl UpdaterApp {
                         match installed {
                             None => {
                                 ui.label(format!("najnowsza: {}", latest.version));
-                                if ui
-                                    .add_enabled(!busy, egui::Button::new("Zainstaluj"))
-                                    .clicked()
-                                {
+                                if ui.add_enabled(!busy, egui::Button::new("Zainstaluj")).clicked() {
                                     action = Some(Action::Install(app.id.clone()));
                                 }
                             }
                             Some(local) => {
                                 if is_newer(&latest.version, &local.version) {
                                     ui.label(format!("{} → {}", local.version, latest.version));
-                                    if ui
-                                        .add_enabled(!busy, egui::Button::new("Aktualizuj"))
-                                        .clicked()
-                                    {
+                                    if ui.add_enabled(!busy, egui::Button::new("Aktualizuj")).clicked() {
                                         action = Some(Action::Install(app.id.clone()));
                                     }
                                 } else {
@@ -138,13 +121,8 @@ impl UpdaterApp {
                                         action = Some(Action::Launch(exe.clone()));
                                     }
                                 }
-                                let confirming =
-                                    self.confirm_uninstall.as_deref() == Some(app.id.as_str());
-                                let label = if confirming {
-                                    "Potwierdź odinstalowanie"
-                                } else {
-                                    "Odinstaluj"
-                                };
+                                let confirming = self.confirm_uninstall.as_deref() == Some(app.id.as_str());
+                                let label = if confirming { "Potwierdź odinstalowanie" } else { "Odinstaluj" };
                                 if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
                                     action = Some(if confirming {
                                         Action::Uninstall(app.id.clone())
@@ -166,101 +144,61 @@ impl UpdaterApp {
 
         ui.horizontal(|ui| {
             ui.label("Aplikacja:");
-            let selected = if self.form.id.is_empty() {
-                "nowa".to_string()
-            } else {
-                self.form.id.clone()
-            };
-            egui::ComboBox::from_id_salt("dev_app")
-                .selected_text(selected)
-                .show_ui(ui, |ui| {
-                    if ui
-                        .selectable_label(self.form.id.is_empty(), "nowa")
-                        .clicked()
-                    {
-                        self.form = DevForm {
-                            platform: self.form.platform.clone(),
-                            ..Default::default()
-                        };
+            let selected = if self.form.id.is_empty() { "nowa".to_string() } else { self.form.id.clone() };
+            egui::ComboBox::from_id_salt("dev_app").selected_text(selected).show_ui(ui, |ui| {
+                if ui.selectable_label(self.form.id.is_empty(), "nowa").clicked() {
+                    self.form = DevForm { platform: self.form.platform.clone(), ..Default::default() };
+                    self.confirm_delete = false;
+                }
+                for app in remote {
+                    if ui.selectable_label(self.form.id == app.id, &app.id).clicked() {
+                        self.form.id = app.id.clone();
+                        self.form.name = app.name.clone();
+                        self.form.description = app.description.clone();
                         self.confirm_delete = false;
                     }
-                    for app in remote {
-                        if ui
-                            .selectable_label(self.form.id == app.id, &app.id)
-                            .clicked()
-                        {
-                            self.form.id = app.id.clone();
-                            self.form.name = app.name.clone();
-                            self.form.description = app.description.clone();
-                            self.confirm_delete = false;
-                        }
-                    }
-                });
+                }
+            });
         });
 
-        egui::Grid::new("dev_form")
-            .num_columns(2)
-            .spacing([8.0, 6.0])
-            .show(ui, |ui| {
-                for (label, value) in [
-                    ("ID", &mut self.form.id),
-                    ("Nazwa", &mut self.form.name),
-                    ("Opis", &mut self.form.description),
-                    ("Wersja (semver)", &mut self.form.version),
-                    ("Platforma", &mut self.form.platform),
-                    ("Notatki wydania", &mut self.form.notes),
-                ] {
-                    ui.label(label);
-                    ui.text_edit_singleline(value);
-                    ui.end_row();
-                }
-                ui.label("Plik (exe lub zip)");
-                ui.horizontal(|ui| {
-                    if ui.button("Wybierz…").clicked() {
-                        self.form.file = rfd::FileDialog::new().pick_file();
-                    }
-                    ui.label(
-                        self.form
-                            .file
-                            .as_ref()
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_default(),
-                    );
-                });
+        egui::Grid::new("dev_form").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+            for (label, value) in [
+                ("ID", &mut self.form.id),
+                ("Nazwa", &mut self.form.name),
+                ("Opis", &mut self.form.description),
+                ("Wersja (semver)", &mut self.form.version),
+                ("Platforma", &mut self.form.platform),
+                ("Notatki wydania", &mut self.form.notes),
+            ] {
+                ui.label(label);
+                ui.text_edit_singleline(value);
                 ui.end_row();
+            }
+            ui.label("Plik (exe lub zip)");
+            ui.horizontal(|ui| {
+                if ui.button("Wybierz…").clicked() {
+                    self.form.file = rfd::FileDialog::new().pick_file();
+                }
+                ui.label(self.form.file.as_ref().map(|p| p.display().to_string()).unwrap_or_default());
             });
+            ui.end_row();
+        });
 
         let has_id = !self.form.id.is_empty();
         let can_upload = has_id && !self.form.version.is_empty() && self.form.file.is_some();
         let exists = remote.iter().any(|a| a.id == self.form.id);
         ui.horizontal(|ui| {
-            if ui
-                .add_enabled(!busy && can_upload, egui::Button::new("Wyślij wydanie"))
-                .clicked()
-            {
+            if ui.add_enabled(!busy && can_upload, egui::Button::new("Wyślij wydanie")).clicked() {
                 jobs::upload(&self.shared, &ctx, self.form.clone());
             }
-            if ui
-                .add_enabled(!busy && has_id, egui::Button::new("Zapisz opis"))
-                .clicked()
-            {
+            if ui.add_enabled(!busy && has_id, egui::Button::new("Zapisz opis")).clicked() {
                 jobs::save_meta(&self.shared, &ctx, self.form.clone());
             }
-            let label = if self.confirm_delete {
-                "Potwierdź usunięcie"
-            } else {
-                "Usuń aplikację"
-            };
-            if ui
-                .add_enabled(!busy && exists, egui::Button::new(label))
-                .clicked()
-            {
+            let label = if self.confirm_delete { "Potwierdź usunięcie" } else { "Usuń aplikację" };
+            if ui.add_enabled(!busy && exists, egui::Button::new(label)).clicked() {
                 if self.confirm_delete {
                     jobs::delete_app(&self.shared, &ctx, self.form.id.clone());
-                    self.form = DevForm {
-                        platform: self.form.platform.clone(),
-                        ..Default::default()
-                    };
+                    self.form = DevForm { platform: self.form.platform.clone(), ..Default::default() };
                 }
                 self.confirm_delete = !self.confirm_delete;
             }
@@ -276,10 +214,7 @@ impl UpdaterApp {
                 ui.strong(&app.id);
                 for release in &app.releases {
                     ui.horizontal(|ui| {
-                        ui.label(format!(
-                            "{} [{}] {}",
-                            release.version, release.platform, release.filename
-                        ));
+                        ui.label(format!("{} [{}] {}", release.version, release.platform, release.filename));
                         if ui.add_enabled(!busy, egui::Button::new("Usuń")).clicked() {
                             jobs::delete_release(
                                 &self.shared,
@@ -309,41 +244,34 @@ impl eframe::App for UpdaterApp {
 
         let (remote, store, busy, status, progress, dev_unlocked, self_update) = {
             let m = self.shared.lock().unwrap();
-            (
-                m.remote.clone(),
-                m.store.clone(),
-                m.busy,
-                m.status.clone(),
-                m.progress.clone(),
-                m.dev_password.is_some(),
-                m.self_update.clone(),
-            )
+            (m.remote.clone(), m.store.clone(), m.busy, m.status.clone(), m.progress.clone(), m.dev_password.is_some(), m.self_update.clone())
         };
 
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui
-                    .heading("App Updater")
-                    .interact(egui::Sense::click())
-                    .clicked()
-                {
+                if ui.heading("App Updater").interact(egui::Sense::click()).clicked() {
                     self.title_clicks += 1;
                     if self.title_clicks >= 5 {
                         self.title_clicks = 0;
                         self.show_password = true;
                     }
                 }
-                if ui
-                    .add_enabled(!busy, egui::Button::new("Odśwież"))
-                    .clicked()
-                {
+                if ui.add_enabled(!busy, egui::Button::new("Odśwież")).clicked() {
                     jobs::refresh(&self.shared, ctx);
                 }
-                if ui
-                    .add_enabled(!busy, egui::Button::new("Aktualizuj wszystko"))
-                    .clicked()
-                {
+                if ui.add_enabled(!busy, egui::Button::new("Aktualizuj wszystko")).clicked() {
                     jobs::update_all(&self.shared, ctx);
+                }
+                let label = if self.confirm_self_uninstall {
+                    "Potwierdź (usuwa też aplikacje)"
+                } else {
+                    "Odinstaluj updater"
+                };
+                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                    if self.confirm_self_uninstall {
+                        jobs::uninstall_self(&self.shared, ctx);
+                    }
+                    self.confirm_self_uninstall = !self.confirm_self_uninstall;
                 }
             });
             ui.horizontal(|ui| {
@@ -360,10 +288,7 @@ impl eframe::App for UpdaterApp {
             if let Some(version) = &self_update {
                 ui.horizontal(|ui| {
                     ui.label(format!("Nowa wersja updatera: {version}"));
-                    if ui
-                        .add_enabled(!busy, egui::Button::new("Zaktualizuj updater"))
-                        .clicked()
-                    {
+                    if ui.add_enabled(!busy, egui::Button::new("Zaktualizuj updater")).clicked() {
                         jobs::self_update(&self.shared, ctx);
                     }
                 });
@@ -378,10 +303,7 @@ impl eframe::App for UpdaterApp {
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             if let Some((name, fraction)) = &progress {
-                ui.add(
-                    egui::ProgressBar::new(*fraction)
-                        .text(format!("{name} {:.0}%", fraction * 100.0)),
-                );
+                ui.add(egui::ProgressBar::new(*fraction).text(format!("{name} {:.0}%", fraction * 100.0)));
             }
             ui.label(&status);
         });
