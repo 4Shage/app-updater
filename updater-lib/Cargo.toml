@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 common = { path = "../common" }
 anyhow = "1"
-dirs = "5"
+dirs = "7"
 hex = "0.4"
 self-replace = "1"
 serde = { version = "1", features = ["derive"] }
