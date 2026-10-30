@@ -1,9 +1,9 @@
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result};
 use updater_lib::install::{self, make_executable, prune_old, MAX_VERSION_FILES};
+use updater_lib::selfupdate;
 use updater_lib::shortcut;
 use updater_lib::store::Store;
 
@@ -58,25 +58,27 @@ pub fn uninstall(store: &mut Store) -> Result<()> {
 
     shortcut::remove(SHORTCUT_NAME);
     Store::delete_state();
-    remove_home_later(&Store::home_dir());
+    remove_home()
+}
+
+fn remove_home() -> Result<()> {
+    let home = Store::home_dir();
+    let current = std::env::current_exe()?;
+    let canonical_home = home.canonicalize().unwrap_or_else(|_| home.clone());
+    let inside = current.canonicalize().unwrap_or_else(|_| current.clone()).starts_with(&canonical_home);
+
+    if !inside {
+        let _ = fs::remove_dir_all(&home);
+        return Ok(());
+    }
+    for entry in fs::read_dir(&home)?.flatten() {
+        let path = entry.path();
+        if path == current {
+            continue;
+        }
+        let _ = if path.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
+    }
+    selfupdate::self_delete(&home)?;
+    let _ = fs::remove_dir(&home);
     Ok(())
-}
-
-#[cfg(windows)]
-fn remove_home_later(home: &Path) {
-    use std::os::windows::process::CommandExt;
-
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let _ = Command::new("cmd")
-        .raw_arg(format!("/C ping -n 3 127.0.0.1 >nul & rmdir /s /q \"{}\"", home.display()))
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
-}
-
-#[cfg(not(windows))]
-fn remove_home_later(home: &Path) {
-    let _ = Command::new("sh")
-        .args(["-c", "sleep 2; rm -rf \"$0\""])
-        .arg(home)
-        .spawn();
 }

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{bail, Result};
 use common::{current_platform, is_newer, Release};
 
@@ -29,4 +31,10 @@ pub fn self_update(server: &str, app_id: &str, current_version: &str) -> Result<
     self_replace::self_replace(&tmp)?;
     let _ = std::fs::remove_file(&tmp);
     Ok(Some(release.version))
+}
+
+/// Usuwa biezacy plik exe oraz katalog `dir`, w ktorym sie znajduje.
+pub fn self_delete(dir: &Path) -> Result<()> {
+    self_replace::self_delete_outside_path(dir)?;
+    Ok(())
 }
