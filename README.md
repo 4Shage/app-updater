@@ -1,34 +1,44 @@
 # App Updater
 
-Workspace Rust: `common` (typy), `server` (axum), `updater-lib` (biblioteka do zlinkowania), `updater-gui` (binarka `updater`).
+Workspace Rust:
+
+- `common` - wspolne typy
+- `server` - serwer (axum), obraz Docker
+- `updater-lib` - biblioteka do zlinkowania w swoich aplikacjach
+- `gui-common` - wspolny styl egui
+- `updater-gui` - klient `updater` (instalacja, aktualizacje, odinstalowanie)
+- `dev-gui` - panel developera `updater-dev` (wiele serwerow, zapamietane hasla, upload wydan)
 
 ## Serwer
 
     DEV_PASSWORD=tajne DATA_DIR=./data BIND=0.0.0.0:8080 cargo run --release -p updater-server
 
-Docker: `docker build -f server/Dockerfile -t updater-server .`
-
+Obraz: `ghcr.io/<owner>/<repo>-server` (publikowany przez `server-release.yml`).
 Wystaw za reverse proxy z HTTPS - haslo dev leci w naglowku `x-dev-password`.
 
-## Klient standalone
+## Klient
 
     cargo run --release -p updater-gui
 
-- `Ctrl+Shift+D` - ukryty tryb dev (haslo), pojawia sie zakladka Dev: upload wydan, usuwanie.
-- `updater --update-all` - aktualizacja bez GUI.
-- `updater --register <id> <wersja> <sciezka_exe>` - dodaje juz zainstalowana aplikacje do zarzadzania.
+- `updater --update-all` - aktualizacja bez GUI
+- `updater --register <id> <wersja> <sciezka_exe>` - dodaje juz zainstalowana aplikacje
 
-Wydanie to pojedynczy plik exe albo `.zip` (rozpakowywany do katalogu aplikacji; glowny plik musi nazywac sie `<id>` lub `<id>.exe`).
-Wersje w formacie semver (`1.2.3`). Platforma: `windows-x86_64`, `linux-x86_64`, `linux-aarch64`...
+Updater aktualizuje sie sam, jesli na serwerze jest aplikacja o ID `updater` w nowszej wersji.
 
-## Zlinkowanie w swojej aplikacji
+## Panel developera
 
-    # Cargo.toml
-    updater-lib = { path = "../app-updater/updater-lib" }
+    cargo run --release -p updater-dev-gui
 
-    // self-update (wydanie = pojedynczy exe)
-    if let Ok(Some(v)) = updater_lib::selfupdate::self_update("https://updates.example.com", "mojapp", env!("CARGO_PKG_VERSION")) {
-        println!("zaktualizowano do {v}, uruchom ponownie");
-    }
+Serwery i hasla zapisuja sie w `%APPDATA%\AppUpdaterDev\servers.json` (jawnym tekstem).
+Wydanie to pojedynczy plik exe albo `.zip`; wersje w formacie semver; platforma np. `windows-x86_64`.
 
-Albo odpal `updater` z poziomu aplikacji (`Command::new("updater").arg("--update-all")`).
+## Wersja i wydania
+
+Klient i panel dev maja wspolna wersje: `[workspace.package]` w glownym `Cargo.toml`. Po jej zmianie:
+
+- `client-release.yml` - wydanie `v<wersja>` z klientem
+- `dev-release.yml` - wydanie `dev-v<wersja>` z panelem developera
+
+Serwer ma osobna wersje w `server/Cargo.toml`. Jej zmiana uruchamia tylko `server-release.yml`
+(obraz Docker do GHCR, bez wydania na GitHubie). Po zmianie wersji uruchom `cargo update`
+i zacommituj `Cargo.lock` (workflowy uzywaja `--locked`).

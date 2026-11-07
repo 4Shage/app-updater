@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -17,7 +16,6 @@ pub struct Model {
     pub status: String,
     pub busy: bool,
     pub progress: Option<(String, f32)>,
-    pub dev_password: Option<String>,
     pub self_update: Option<String>,
 }
 
@@ -29,28 +27,16 @@ impl Model {
             status: String::new(),
             busy: false,
             progress: None,
-            dev_password: None,
             self_update: None,
         }
     }
 
     fn api(&self) -> Api {
-        Api::new(&self.store.server_url).with_password(self.dev_password.clone())
+        Api::new(&self.store.server_url)
     }
 }
 
 pub type Shared = Arc<Mutex<Model>>;
-
-#[derive(Clone, Default)]
-pub struct DevForm {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub version: String,
-    pub platform: String,
-    pub notes: String,
-    pub file: Option<PathBuf>,
-}
 
 fn run<F>(shared: &Shared, ctx: &egui::Context, job: F)
 where
@@ -135,62 +121,20 @@ pub fn update_all(shared: &Shared, ctx: &egui::Context) {
     });
 }
 
-pub fn unlock(shared: &Shared, ctx: &egui::Context, password: String) {
-    run(shared, ctx, move |shared, _| {
-        let api = Api::new(&shared.lock().unwrap().store.server_url).with_password(Some(password.clone()));
-        api.dev_check()?;
-        shared.lock().unwrap().dev_password = Some(password);
-        Ok("Tryb dev odblokowany".into())
-    });
-}
-
-pub fn upload(shared: &Shared, ctx: &egui::Context, form: DevForm) {
-    run(shared, ctx, move |shared, _| {
-        let api = shared.lock().unwrap().api();
-        let file = form.file.as_ref().context("nie wybrano pliku")?;
-        let name = if form.name.is_empty() { &form.id } else { &form.name };
-        api.dev_upsert_app(&form.id, name, &form.description)?;
-        api.dev_upload(&form.id, &form.version, &form.platform, &form.notes, file)?;
-        fetch_remote(shared)?;
-        Ok(format!("Wysłano {} {}", form.id, form.version))
-    });
-}
-
-pub fn delete_release(shared: &Shared, ctx: &egui::Context, id: String, version: String, platform: String) {
-    run(shared, ctx, move |shared, _| {
-        let api = shared.lock().unwrap().api();
-        api.dev_delete_release(&id, &version, &platform)?;
-        fetch_remote(shared)?;
-        Ok(format!("Usunięto {id} {version}"))
-    });
-}
-
-pub fn save_meta(shared: &Shared, ctx: &egui::Context, form: DevForm) {
-    run(shared, ctx, move |shared, _| {
-        let api = shared.lock().unwrap().api();
-        let name = if form.name.is_empty() { &form.id } else { &form.name };
-        api.dev_upsert_app(&form.id, name, &form.description)?;
-        fetch_remote(shared)?;
-        Ok(format!("Zapisano opis {}", form.id))
-    });
-}
-
-pub fn delete_app(shared: &Shared, ctx: &egui::Context, id: String) {
-    run(shared, ctx, move |shared, _| {
-        let api = shared.lock().unwrap().api();
-        api.dev_delete_app(&id)?;
-        fetch_remote(shared)?;
-        Ok(format!("Usunięto aplikację {id}"))
-    });
-}
-
 pub fn uninstall(shared: &Shared, ctx: &egui::Context, id: String) {
     run(shared, ctx, move |shared, _| {
         let mut store = shared.lock().unwrap().store.clone();
-        install::uninstall(&mut store, &id)
-            .context("nie udalo sie usunac (czy aplikacja jest zamknieta?)")?;
+        install::uninstall(&mut store, &id).context("nie udalo sie usunac (czy aplikacja jest zamknieta?)")?;
         shared.lock().unwrap().store = store;
         Ok(format!("Odinstalowano {id}"))
+    });
+}
+
+pub fn uninstall_self(shared: &Shared, ctx: &egui::Context) {
+    run(shared, ctx, |shared, _| {
+        let mut store = shared.lock().unwrap().store.clone();
+        crate::selfinstall::uninstall(&mut store)?;
+        std::process::exit(0)
     });
 }
 
@@ -209,12 +153,4 @@ fn restart() -> ! {
         let _ = std::process::Command::new(exe).spawn();
     }
     std::process::exit(0)
-}
-
-pub fn uninstall_self(shared: &Shared, ctx: &egui::Context) {
-    run(shared, ctx, |shared, _| {
-        let mut store = shared.lock().unwrap().store.clone();
-        crate::selfinstall::uninstall(&mut store)?;
-        std::process::exit(0)
-    });
 }

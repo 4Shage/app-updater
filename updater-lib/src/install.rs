@@ -46,10 +46,8 @@ pub fn install_release(
         prune_old(&dir, exe, MAX_VERSION_FILES);
     }
 
-    if existing.is_none() {
-        if let Some(exe) = &exe {
-            let _ = shortcut::create(name, exe);
-        }
+    if let Some(exe) = exe.as_ref().filter(|_| existing.is_none()) {
+        let _ = shortcut::create(name, exe);
     }
 
     Ok(Installed { name: name.into(), version: release.version.clone(), dir, exe })
@@ -194,7 +192,7 @@ pub fn prune_old(dir: &Path, exe: &Path, keep: usize) {
         })
         .collect();
 
-    old.sort_by(|a, b| b.0.cmp(&a.0));
+    old.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     for (_, path) in old.into_iter().skip(keep.saturating_sub(1)) {
         let _ = fs::remove_file(path);
     }

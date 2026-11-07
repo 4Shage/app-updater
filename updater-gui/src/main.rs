@@ -24,6 +24,9 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "App Updater",
         options,
-        Box::new(|_| Ok(Box::new(app::UpdaterApp::new()))),
+        Box::new(|cc| {
+            gui_common::apply_style(&cc.egui_ctx);
+            Ok(Box::new(app::UpdaterApp::new()))
+        }),
     )
 }

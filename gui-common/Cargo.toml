@@ -1,0 +1,7 @@
+[package]
+name = "gui-common"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+egui = "0.29"

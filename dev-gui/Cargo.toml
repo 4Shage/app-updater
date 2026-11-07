@@ -1,0 +1,23 @@
+[package]
+name = "updater-dev-gui"
+version.workspace = true
+edition.workspace = true
+description = "Panel developera do publikowania aplikacji na serwerze updatera"
+
+[[bin]]
+name = "updater-dev"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+updater-lib = { path = "../updater-lib" }
+gui-common = { path = "../gui-common" }
+anyhow = "1"
+dirs = "5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "x11"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "async-std"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"

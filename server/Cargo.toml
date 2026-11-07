@@ -1,12 +1,12 @@
 [package]
 name = "updater-server"
-version.workspace = true
+version = "0.1.4"
 edition.workspace = true
 
 [dependencies]
 common = { path = "../common" }
-axum = { version = "0.7", features = ["multipart"] }
-tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio", "multipart"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "net", "io-util", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["io"] }
 serde_json = "1"
 sha2 = "0.10"
