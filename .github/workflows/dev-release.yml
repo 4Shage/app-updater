@@ -1,9 +1,10 @@
 name: Dev Release
 
+run-name: ${{ github.ref_name }}
+
 on:
   push:
-    branches: [master]
-    paths: [Cargo.toml]
+    tags: ["dev-v*"]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "dev-v$version" ]; then
+            echo "tag $GITHUB_REF_NAME nie pasuje do wersji $version z Cargo.toml" >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if gh release view "dev-v$version" >/dev/null 2>&1; then
             echo "new=false" >> "$GITHUB_OUTPUT"

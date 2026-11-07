@@ -34,11 +34,17 @@ Wydanie to pojedynczy plik exe albo `.zip`; wersje w formacie semver; platforma 
 
 ## Wersja i wydania
 
-Klient i panel dev maja wspolna wersje: `[workspace.package]` w glownym `Cargo.toml`. Po jej zmianie:
+Wydania uruchamia wypchniecie taga. Nazwa uruchomienia w Actions = nazwa taga (np. `server-v0.1.4`).
 
-- `client-release.yml` - wydanie `v<wersja>` z klientem
-- `dev-release.yml` - wydanie `dev-v<wersja>` z panelem developera
+| Co | Wersja w | Tag | Efekt |
+| --- | --- | --- | --- |
+| serwer | `server/Cargo.toml` | `server-v<wersja>` | obraz Docker w GHCR (bez wydania na GitHubie) |
+| klient | `[workspace.package]` w glownym `Cargo.toml` | `client-v<wersja>` | wydanie `client-v<wersja>` |
+| panel dev | jak klient | `dev-v<wersja>` | wydanie `dev-v<wersja>` |
 
-Serwer ma osobna wersje w `server/Cargo.toml`. Jej zmiana uruchamia tylko `server-release.yml`
-(obraz Docker do GHCR, bez wydania na GitHubie). Po zmianie wersji uruchom `cargo update`
-i zacommituj `Cargo.lock` (workflowy uzywaja `--locked`).
+Przyklad (serwer): zmien wersje w `server/Cargo.toml`, `cargo update`, commit, potem
+
+    git tag server-v0.1.4
+    git push origin master server-v0.1.4
+
+Workflow sprawdza, czy tag zgadza sie z wersja w `Cargo.toml`, i konczy sie bledem, jesli nie.

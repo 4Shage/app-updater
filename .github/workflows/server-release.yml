@@ -1,9 +1,10 @@
 name: Server Release
 
+run-name: ${{ github.ref_name }}
+
 on:
   push:
-    branches: [master]
-    paths: [server/Cargo.toml]
+    tags: ["server-v*"]
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,10 @@ jobs:
         run: |
           version=$(grep -m1 '^version' server/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
           image="ghcr.io/${GITHUB_REPOSITORY,,}-server"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "server-v$version" ]; then
+            echo "tag $GITHUB_REF_NAME nie pasuje do wersji $version z server/Cargo.toml" >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "image=$image" >> "$GITHUB_OUTPUT"
           if docker manifest inspect "$image:$version" >/dev/null 2>&1; then

@@ -1,9 +1,10 @@
 name: Client Release
 
+run-name: ${{ github.ref_name }}
+
 on:
   push:
-    branches: [master]
-    paths: [Cargo.toml]
+    tags: ["client-v*"]
   workflow_dispatch:
 
 permissions:
@@ -27,8 +28,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "client-v$version" ]; then
+            echo "tag $GITHUB_REF_NAME nie pasuje do wersji $version z Cargo.toml" >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if gh release view "v$version" >/dev/null 2>&1; then
+          if gh release view "client-v$version" >/dev/null 2>&1; then
             echo "new=false" >> "$GITHUB_OUTPUT"
           else
             echo "new=true" >> "$GITHUB_OUTPUT"
@@ -92,7 +97,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ needs.version.outputs.version }}" dist/* \
+          gh release create "client-v${{ needs.version.outputs.version }}" dist/* \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
             --title "Updater v${{ needs.version.outputs.version }}" \
