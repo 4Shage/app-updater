@@ -9,7 +9,11 @@ use updater_lib::store::Store;
 
 const SHORTCUT_NAME: &str = "App Updater";
 
-/// Kopiuje updater do katalogu domowego, tworzy skrot i uruchamia kopie.
+fn own_exe_name() -> String {
+    format!("updater{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// Kopiuje updater do katalogu domowego, tworzy skroty i uruchamia kopie.
 /// Zwraca true, gdy uruchomiono zainstalowana kopie i ten proces ma sie zakonczyc.
 pub fn run() -> bool {
     if cfg!(debug_assertions) {
@@ -27,7 +31,7 @@ fn copy_self() -> Option<bool> {
         return Some(false);
     }
 
-    let target = home.join(format!("updater{}", std::env::consts::EXE_SUFFIX));
+    let target = home.join(own_exe_name());
     fs::create_dir_all(&home).ok()?;
     if target.exists() {
         let old = target.with_extension("old");
@@ -56,7 +60,7 @@ pub fn uninstall(store: &mut Store) -> Result<()> {
             .with_context(|| format!("nie udalo sie usunac {id} (zamknij aplikacje)"))?;
     }
 
-    shortcut::remove(SHORTCUT_NAME);
+    shortcut::remove(SHORTCUT_NAME, Some(&Store::home_dir().join(own_exe_name())));
     Store::delete_state();
     remove_home()
 }
